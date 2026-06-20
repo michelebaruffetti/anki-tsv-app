@@ -170,6 +170,7 @@ export function parseInput(rawText: string, capitolo: string): ParseResult {
   let questionCounter = 0;
   let lastOptionLetter: string | null = null;
   let pendingNumber: string | null = null;
+  let hasStartedQuestion = false;
 
   const hasOptions = () => Object.keys(currentOptions).length > 0;
   const isComplete = () => Object.keys(currentOptions).length === 4;
@@ -244,7 +245,7 @@ export function parseInput(rawText: string, capitolo: string): ParseResult {
     // --- RIGA VUOTA: confine esplicito ---
     if (!line) {
       if (isComplete()) flush();
-      else if (!hasOptions()) {
+      else if (!hasOptions() && !hasStartedQuestion) {
         // Riga vuota nel testo pre-opzioni: resetta buffer/numero orfani.
         questionBuffer = [];
         pendingNumber = null;
@@ -256,6 +257,7 @@ export function parseInput(rawText: string, capitolo: string): ParseResult {
     const single = trySingleLineQuestion(line);
     if (single) {
       flush();
+      hasStartedQuestion = true;
       pushFinalQuestion(single.questionText, single.options, single.number);
       continue;
     }
@@ -267,6 +269,7 @@ export function parseInput(rawText: string, capitolo: string): ParseResult {
       const content = m[2].replace(/^[.):\-]\s*/, "").trim();
 
       if (isComplete()) flush();
+      hasStartedQuestion = true;
 
       if (currentOptions[letter] !== undefined) {
         errors.push({
@@ -300,10 +303,15 @@ export function parseInput(rawText: string, capitolo: string): ParseResult {
     // può contenere la numerazione originale, da preservare.
     if (questionBuffer.length === 0) {
       const { number, rest } = extractNumber(line);
-      if (number) pendingNumber = number;
-      questionBuffer.push(rest);
+      if (number) {
+        pendingNumber = number;
+        hasStartedQuestion = true;
+      }
+      if (hasStartedQuestion) questionBuffer.push(rest);
     } else {
-      questionBuffer.push(line);
+      if (hasStartedQuestion) {
+        questionBuffer.push(line);
+      }
     }
   }
 
