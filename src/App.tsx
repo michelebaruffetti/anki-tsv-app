@@ -1,5 +1,69 @@
-import { useMemo, useState, useCallback, KeyboardEvent } from "react";
-import { parseInput, buildRow, type ParseResult } from "./parser";
+import { useMemo, useState, useCallback, useRef, KeyboardEvent } from "react";
+import {
+  parseInput,
+  buildRow,
+  parseAnswersFile,
+  injectGiustaFromAnswers,
+  type ParseResult,
+} from "./parser";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let pdfjsLib: any = null;
+
+async function extractTextFromPdf(file: File): Promise<string> {
+  if (!pdfjsLib) {
+    pdfjsLib = await import("pdfjs-dist");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+      "pdfjs-dist/build/pdf.worker.min.mjs",
+      import.meta.url,
+    ).toString();
+  }
+
+  const buffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  const pages: string[] = [];
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const text = content.items
+      .map((item: { str: string }) => item.str)
+      .join(" ");
+    pages.push(text);
+  }
+
+  // Il PDF spesso mette più domande sulla stessa riga.
+  // Inseriamo un newline prima di ogni numero di domanda
+  // che non sia a inizio riga, così parseAnswersFile può riconoscerle.
+  const raw = pages.join("\n");
+  return raw.replace(/(?<=\S)\s+(?=\d+\.\s)/g, "\n");
+}
+
+function rtfToText(rtf: string): string {
+  if (!rtf.includes("\\rtf")) return rtf;
+
+  // Rimuove ricorsivamente tutti i gruppi RTF {...}
+  let text = rtf;
+  let prev = "";
+  while (prev !== text) {
+    prev = text;
+    text = text.replace(/\{[^{}]*\}/g, "");
+  }
+
+  return text
+    .replace(/\\(?:par|line|page|sect|row|cell)\b/gi, "\n")
+    .replace(/\\([a-zA-Z]+)(-?\d+)?/g, "")
+    .replace(/\\'([0-9a-fA-F]{2})/g, (_, h) =>
+      String.fromCharCode(parseInt(h, 16)),
+    )
+    .replace(/\\u(-?\d+)\S?/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/[{}]/g, "")
+    .replace(/\n +/g, "\n")
+    .replace(/ +\n/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
 /* ── esempi di testo ─────────────────────────────────────────────────── */
 
@@ -65,54 +129,84 @@ function FormatGuide() {
 
       <div className="accordion-body" aria-hidden={!open}>
         <div className="accordion-inner">
-
           <section className="guide-section">
             <h3>Formato A — Multi-riga</h3>
-            <p>Ogni opzione su una riga separata. Il testo della domanda può stare su più righe. Le domande sono separate da righe vuote (opzionale).</p>
+            <p>
+              Ogni opzione su una riga separata. Il testo della domanda può
+              stare su più righe. Le domande sono separate da righe vuote
+              (opzionale).
+            </p>
             <pre>{`1. Testo della domanda:
 A prima opzione
 B seconda opzione (giusta)
 C terza opzione
 D quarta opzione`}</pre>
-            <p>Separatori accettati dopo la lettera: spazio, <code>.</code> <code>)</code> <code>:</code> <code>-</code></p>
+            <p>
+              Separatori accettati dopo la lettera: spazio, <code>.</code>{" "}
+              <code>)</code> <code>:</code> <code>-</code>
+            </p>
           </section>
 
           <section className="guide-section">
             <h3>Formato B — Lista numerata (tutto su una riga)</h3>
-            <p>Tutta la domanda + le 4 opzioni inline sulla stessa riga. Tipico di testo generato da AI o copiato da PDF. Le lettere A B C D devono comparire come parole isolate nell'ordine A→B→C→D.</p>
+            <p>
+              Tutta la domanda + le 4 opzioni inline sulla stessa riga. Tipico
+              di testo generato da AI o copiato da PDF. Le lettere A B C D
+              devono comparire come parole isolate nell'ordine A→B→C→D.
+            </p>
             <pre>{`1. Testo della domanda: contesto A prima opzione B seconda opzione (giusta) C terza opzione D quarta opzione`}</pre>
           </section>
 
           <section className="guide-section">
             <h3>Risposta corretta</h3>
-            <p>Aggiungi <code>(giusta)</code> o <code>(giusto)</code> in qualsiasi punto del testo dell'opzione corretta. Il marker viene rimosso in output. Esattamente una risposta per domanda deve essere marcata.</p>
+            <p>
+              Aggiungi <code>(giusta)</code> o <code>(giusto)</code> in
+              qualsiasi punto del testo dell'opzione corretta. Il marker viene
+              rimosso in output. Esattamente una risposta per domanda deve
+              essere marcata.
+            </p>
             <pre>{`B seconda opzione (giusta)
 A la risposta (giusto) con testo dopo`}</pre>
           </section>
 
           <section className="guide-section">
             <h3>Testo wrappato e righe spezzate</h3>
-            <p>Se un'opzione lunga va a capo nel copy-paste, la riga di continuazione viene riattaccata automaticamente all'opzione precedente — incluso <code>(giusta)</code> su riga propria.</p>
+            <p>
+              Se un'opzione lunga va a capo nel copy-paste, la riga di
+              continuazione viene riattaccata automaticamente all'opzione
+              precedente — incluso <code>(giusta)</code> su riga propria.
+            </p>
             <pre>{`D perché richiedono un cambiamento radicale
 (giusta)`}</pre>
           </section>
 
           <section className="guide-section">
             <h3>Markdown e testo sporco</h3>
-            <p>Il grassetto markdown (<code>**testo**</code>) viene rimosso prima del parsing. Testo introduttivo separato da una riga vuota dalle domande viene ignorato. I numeri di lista (es. <code>9.</code>) vengono preservati nel testo della domanda in output.</p>
+            <p>
+              Il grassetto markdown (<code>**testo**</code>) viene rimosso prima
+              del parsing. Testo introduttivo separato da una riga vuota dalle
+              domande viene ignorato. I numeri di lista (es. <code>9.</code>)
+              vengono preservati nel testo della domanda in output.
+            </p>
           </section>
 
           <section className="guide-section">
             <h3>Output TSV — 7 colonne</h3>
             <pre>{`CAPITOLO - domanda  [TAB]  A  [TAB]  B  [TAB]  C  [TAB]  D  [TAB]  binario  [TAB]  2`}</pre>
-            <p>Il codice binario (es. <code>0100</code>) indica la risposta corretta: posizione 1 = A, 2 = B, 3 = C, 4 = D.</p>
+            <p>
+              Il codice binario (es. <code>0100</code>) indica la risposta
+              corretta: posizione 1 = A, 2 = B, 3 = C, 4 = D.
+            </p>
           </section>
 
           <section className="guide-section guide-section--tip">
             <span className="tip-icon">⌨</span>
-            <p>Premi <kbd>Ctrl</kbd>+<kbd>Enter</kbd> (o <kbd>⌘</kbd>+<kbd>Enter</kbd> su Mac) nella textarea per avviare la conversione senza usare il mouse.</p>
+            <p>
+              Premi <kbd>Ctrl</kbd>+<kbd>Enter</kbd> (o <kbd>⌘</kbd>+
+              <kbd>Enter</kbd> su Mac) nella textarea per avviare la conversione
+              senza usare il mouse.
+            </p>
           </section>
-
         </div>
       </div>
     </div>
@@ -129,18 +223,76 @@ export default function App() {
   const [result, setResult] = useState<ParseResult | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
+  const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAnswersFile = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setFeedbackMsg(null);
+      setCopyState("idle");
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const isPdf = /\.pdf$/i.test(file.name);
+      const isRtf = /\.rtf$/i.test(file.name);
+
+      if (isPdf) {
+        extractTextFromPdf(file)
+          .then((content) => processFileContent(content))
+          .catch((err) => {
+            setFeedbackMsg(
+              `Errore durante la lettura del PDF: ${err instanceof Error ? err.message : err}`,
+            );
+          });
+      } else {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const content = reader.result as string;
+          processFileContent(isRtf ? rtfToText(content) : content);
+        };
+        reader.readAsText(file);
+      }
+
+      e.target.value = "";
+    },
+    [rawText],
+  );
+
+  function processFileContent(content: string) {
+    const answerMap = parseAnswersFile(content);
+    if (answerMap.size === 0) {
+      setFeedbackMsg(
+        "Nessuna domanda riconosciuta nel file. Controlla il formato.",
+      );
+      return;
+    }
+
+    const modified = injectGiustaFromAnswers(rawText, answerMap);
+    if (modified === rawText) {
+      setFeedbackMsg(
+        `Trovate ${answerMap.size} risposte nel file, ma nessuna corrispondenza con le domande nella textarea.`,
+      );
+    } else {
+      const matches = (modified.match(/\(giust[oa]\)/gi) || []).length;
+      setRawText(modified);
+      setFeedbackMsg(
+        `Trovate ${answerMap.size} risposte nel file → ${matches} marcate come corrette.`,
+      );
+    }
+  }
 
   const exportableQuestions = useMemo(
     () =>
       result
         ? result.questions.filter((q) => includeErrors || !q.hasBlockingError)
         : [],
-    [result, includeErrors]
+    [result, includeErrors],
   );
 
   const tsvPreview = useMemo(
     () => exportableQuestions.map(buildRow).join("\n"),
-    [exportableQuestions]
+    [exportableQuestions],
   );
 
   const handleGenerate = useCallback(() => {
@@ -182,7 +334,7 @@ export default function App() {
       setTimeout(() => setCopyState("idle"), 1800);
     } catch {
       setFormError(
-        "Impossibile copiare automaticamente: seleziona e copia il testo dall'anteprima."
+        "Impossibile copiare automaticamente: seleziona e copia il testo dall'anteprima.",
       );
     }
   }
@@ -206,12 +358,15 @@ export default function App() {
       <header className="app-header">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
-            <span /><span /><span />
+            <span />
+            <span />
+            <span />
           </span>
           <div>
             <h1>Anki TSV Generator</h1>
             <p className="subtitle">
-              Da domande a risposta multipla a un file .tsv pronto per l'import in Anki.
+              Da domande a risposta multipla a un file .tsv pronto per l'import
+              in Anki.
             </p>
           </div>
         </div>
@@ -220,10 +375,26 @@ export default function App() {
       <main className="layout">
         {/* ── colonna sinistra: input ── */}
         <section className="panel" aria-labelledby="input-heading">
-          <h2 id="input-heading">
-            <span className="step-num">1</span>
-            Testo di partenza
+          <h2 id="input-heading" className="panel-heading-row">
+            <span>
+              <span className="step-num">1</span>
+              Testo di partenza
+            </span>
+            <button
+              type="button"
+              className="file-answer-btn"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              + compila risposte da file
+            </button>
           </h2>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf"
+            hidden
+            onChange={handleAnswersFile}
+          />
 
           <div className="field">
             <label htmlFor="capitolo">Capitolo</label>
@@ -247,10 +418,18 @@ export default function App() {
             <div className="field-label-row">
               <label htmlFor="rawtext">Domande</label>
               <span className="example-links">
-                <button type="button" className="link-btn" onClick={loadExample}>
+                <button
+                  type="button"
+                  className="link-btn"
+                  onClick={loadExample}
+                >
                   Esempio A
                 </button>
-                <button type="button" className="link-btn" onClick={loadExampleNumbered}>
+                <button
+                  type="button"
+                  className="link-btn"
+                  onClick={loadExampleNumbered}
+                >
                   Esempio B
                 </button>
               </span>
@@ -260,7 +439,9 @@ export default function App() {
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
               onKeyDown={handleTextareaKeyDown}
-              placeholder={"Il concetto di X è:\nA opzione 1\nB opzione 2 (giusta)\nC opzione 3\nD opzione 4"}
+              placeholder={
+                "Il concetto di X è:\nA opzione 1\nB opzione 2 (giusta)\nC opzione 3\nD opzione 4"
+              }
               rows={16}
             />
           </div>
@@ -273,8 +454,18 @@ export default function App() {
             </p>
           )}
 
+          {feedbackMsg && (
+            <p className="form-ok" role="status">
+              {feedbackMsg}
+            </p>
+          )}
+
           <div className="generate-row">
-            <button type="button" className="primary-btn" onClick={handleGenerate}>
+            <button
+              type="button"
+              className="primary-btn"
+              onClick={handleGenerate}
+            >
               Genera TSV
             </button>
             <span className="kbd-hint">
@@ -292,13 +483,53 @@ export default function App() {
 
           {!result && (
             <div className="empty-state">
-              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <rect x="8" y="10" width="32" height="28" rx="4" stroke="currentColor" strokeWidth="2"/>
-                <line x1="14" y1="18" x2="34" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                <line x1="14" y1="24" x2="34" y2="24" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                <line x1="14" y1="30" x2="24" y2="30" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              <svg
+                viewBox="0 0 48 48"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+              >
+                <rect
+                  x="8"
+                  y="10"
+                  width="32"
+                  height="28"
+                  rx="4"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                />
+                <line
+                  x1="14"
+                  y1="18"
+                  x2="34"
+                  y2="18"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+                <line
+                  x1="14"
+                  y1="24"
+                  x2="34"
+                  y2="24"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+                <line
+                  x1="14"
+                  y1="30"
+                  x2="24"
+                  y2="30"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
               </svg>
-              <p>Incolla il testo delle domande e premi <strong>Genera TSV</strong> per vedere l'anteprima.</p>
+              <p>
+                Incolla il testo delle domande e premi{" "}
+                <strong>Genera TSV</strong> per vedere l'anteprima.
+              </p>
             </div>
           )}
 
@@ -325,7 +556,8 @@ export default function App() {
               {result.errors.length > 0 && (
                 <details className="errors-box" open>
                   <summary>
-                    ⚠ {result.errors.length} avviso{result.errors.length > 1 ? "i" : ""} di parsing
+                    ⚠ {result.errors.length} avviso
+                    {result.errors.length > 1 ? "i" : ""} di parsing
                   </summary>
                   <ul>
                     {result.errors.map((err, i) => (
@@ -337,7 +569,8 @@ export default function App() {
 
               {result.questions.length === 0 ? (
                 <p className="empty-state-text">
-                  Nessuna domanda valida trovata. Controlla che ogni domanda abbia esattamente 4 opzioni etichettate A, B, C, D.
+                  Nessuna domanda valida trovata. Controlla che ogni domanda
+                  abbia esattamente 4 opzioni etichettate A, B, C, D.
                 </p>
               ) : (
                 <>

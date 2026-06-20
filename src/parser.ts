@@ -326,6 +326,202 @@ export function parseInput(rawText: string, capitolo: string): ParseResult {
   return { questions, errors };
 }
 
+/* ── gestione file risposte ───────────────────────────────────────────── */
+
+/**
+ * Parser per il file risposte caricato dall'utente.
+ *
+ * Supporta due formati:
+ *
+ * 1) Formato "file di testo" — domanda su una riga, risposta sulla successiva:
+ *    4. Fanon valuta il rapporto …:
+ *    Come uno strumento di potere …
+ *    5. Il ruolo dell'esperienza "vécue" …:
+ *    È centrale …
+ *
+ * 2) Formato "PDF" — domanda e risposta sulla stessa riga separate da ":":
+ *    1. Come il linguaggio interagisce …:
+ *    Fanon sostiene che il linguaggio è un campo …
+ *
+ * Restituisce una mappa: domanda_normalizzata → risposta_corretta.
+ */
+export function parseAnswersFile(content: string): Map<string, string> {
+  const map = new Map<string, string>();
+  const lines = content.split("\n");
+  let currentQuestion: string | null = null;
+  let currentAnswer: string[] = [];
+
+  function flush() {
+    if (currentQuestion && currentAnswer.length > 0) {
+      map.set(currentQuestion, currentAnswer.join(" ").replace(/\s+/g, " ").trim());
+    }
+    currentAnswer = [];
+  }
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const numMatch = line.match(/^\s*(\d+)[.)]\s*/);
+    if (numMatch) {
+      flush();
+      const rest = line.slice(numMatch[0].length).trim();
+
+      // Cerca ":" che separa domanda da risposta sulla stessa riga (formato PDF).
+      // Usa l'ultimo ":" così se la domanda ne contiene uno interno (es. "nota:")
+      // non viene spezzata erroneamente.
+      const lastColon = rest.lastIndexOf(":");
+      if (lastColon >= 0) {
+        const before = rest.slice(0, lastColon).trim();
+        const after = rest.slice(lastColon + 1).trim();
+        if (before && after) {
+          currentQuestion = before;
+          currentAnswer.push(after);
+          continue;
+        }
+      }
+
+      // Formato classico: risposta sulla riga successiva
+      currentQuestion = rest.replace(/:+$/, "").trim();
+    } else if (currentQuestion) {
+      currentAnswer.push(line);
+    }
+  }
+  flush();
+
+  return map;
+}
+
+function _norm(s: string): string {
+  return s.toLowerCase().replace(/[–—\-:;.,!?]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Dato il testo grezzo della textarea e la mappa domanda→risposta,
+ * aggiunge il marker "(giusta)" accanto all'opzione corretta nel testo.
+ * Il testo modificato può essere re-inserito nella textarea e processato
+ * dal parser normale, che riconoscerà il marker.
+ */
+export function injectGiustaFromAnswers(
+  rawText: string,
+  answerMap: Map<string, string>
+): string {
+  if (!rawText.trim() || answerMap.size === 0) return rawText;
+
+  const result = parseInput(rawText, "");
+  if (result.questions.length === 0) return rawText;
+
+  // Per ogni domanda, trova la risposta corretta e l'indice dell'opzione
+  const correctOptionByQ: Map<number, number> = new Map();
+
+  for (const q of result.questions) {
+    const normQ = _norm(q.question);
+
+    let matchedAnswer: string | null = null;
+    for (const [aq, ans] of answerMap) {
+      if (_norm(aq) === normQ) {
+        matchedAnswer = ans;
+        break;
+      }
+    }
+    if (!matchedAnswer) continue;
+
+    const normAnswer = _norm(matchedAnswer);
+    const normOptions = q.options.map((o) => _norm(o));
+    const idx = normOptions.indexOf(normAnswer);
+    if (idx >= 0) {
+      correctOptionByQ.set(q.index, idx);
+    }
+  }
+
+  if (correctOptionByQ.size === 0) return rawText;
+
+  const lines = rawText.split("\n");
+  const optLetters = ["A", "B", "C", "D"];
+  const alreadyMarked = (line: string) => /\(giust[oa]\)/i.test(line);
+  const matchedIndices = new Set<number>();
+
+  // ── Passo 1: formato multi-riga (ogni opzione su riga propria) ──
+  let qi = 0;
+  let optCount = 0;
+  let started = false;
+
+  for (let li = 0; li < lines.length; li++) {
+    const trimmed = lines[li].trim();
+    if (!trimmed) continue;
+
+    const optMatch = trimmed.match(/^([A-Da-d])(?:[.)\:\-]\s*|\s+)(.*)$/);
+    if (!optMatch) continue;
+
+    const letter = optMatch[1].toUpperCase();
+    const optText = optMatch[2].trim();
+
+    if (letter === "A" || optCount === 0) {
+      if (started && optCount > 0) qi++;
+      started = true;
+      optCount = 1;
+    } else {
+      optCount++;
+    }
+
+    if (qi >= result.questions.length) break;
+
+    const currentQ = result.questions[qi];
+    const correctOptIdx = correctOptionByQ.get(currentQ.index);
+    if (correctOptIdx === undefined) {
+      if (letter === "D" || letter === "d") { qi++; optCount = 0; }
+      continue;
+    }
+
+    const correctLetter = optLetters[correctOptIdx];
+    if (letter === correctLetter && !alreadyMarked(lines[li])) {
+      const expectedContent = currentQ.options[correctOptIdx];
+      if (_norm(optText) === _norm(expectedContent)) {
+        lines[li] = lines[li] + " (giusta)";
+        matchedIndices.add(currentQ.index);
+      }
+    }
+
+    if (letter === "D" || letter === "d") { qi++; optCount = 0; }
+  }
+
+  // ── Passo 2: formato singola-riga (A B C D inline con la domanda) ──
+  for (let li = 0; li < lines.length; li++) {
+    const trimmed = lines[li].trim();
+    if (!trimmed || alreadyMarked(lines[li])) continue;
+
+    // Salta righe già riconosciute come opzioni multi-riga
+    if (/^[A-Da-d][.).:\-]\s/.test(trimmed)) continue;
+
+    const single = trySingleLineQuestion(trimmed);
+    if (!single) continue;
+
+    const normQ = _norm(single.questionText);
+
+    for (const q of result.questions) {
+      if (matchedIndices.has(q.index)) continue;
+
+      const correctOptIdx = correctOptionByQ.get(q.index);
+      if (correctOptIdx === undefined) continue;
+      if (_norm(q.question) !== normQ) continue;
+
+      const correctLetter = optLetters[correctOptIdx];
+      const correctOptionText = q.options[correctOptIdx];
+      const escaped = correctOptionText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+      // Sostituisce "Lettera + opzione" con "Lettera + opzione (giusta)"
+      const regex = new RegExp(`(${correctLetter}\\s+)${escaped}`, "i");
+      if (regex.test(lines[li])) {
+        lines[li] = lines[li].replace(regex, `$1${correctOptionText} (giusta)`);
+        matchedIndices.add(q.index);
+      }
+      break;
+    }
+  }
+
+  return lines.join("\n");
+}
+
 export function buildRow(q: ParsedQuestion): string {
   const front = sanitizeCell(`${q.capitolo} - ${q.displayNumber}. ${q.question}`);
   return [
