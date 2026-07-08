@@ -50,7 +50,7 @@ const MARKER_REGEX = /\(\s*giust[oa]\s*\)/i;
 const OPTION_LINE_REGEX = /^([A-Da-d])(?:[.)\:\-]\s*|\s+)(\S.*)/;
 const LEADING_NUMBERING_REGEX = /^\s*(\d+)[.)]\s*/;
 
-function sanitizeCell(s: string): string {
+export function sanitizeCell(s: string): string {
   return s
     .replace(/\t/g, " ")
     .replace(/\r?\n/g, " ")
@@ -69,7 +69,7 @@ interface ExtractedNumber {
 }
 
 /** Estrae una numerazione di lista iniziale tipo "9. " o "12) ", se presente. */
-function extractNumber(line: string): ExtractedNumber {
+export function extractNumber(line: string): ExtractedNumber {
   const m = line.match(LEADING_NUMBERING_REGEX);
   if (!m) return { number: null, rest: line };
   return { number: m[1], rest: line.slice(m[0].length).trim() };
@@ -126,7 +126,7 @@ interface EvaluatedOptions {
   errorMessage: string | null;
 }
 
-function evaluateOptions(rawOptions: [string, string, string, string]): EvaluatedOptions {
+export function evaluateOptions(rawOptions: [string, string, string, string]): EvaluatedOptions {
   const correctPositions: number[] = [];
   const cleanOptions = rawOptions.map((opt, i) => {
     if (MARKER_REGEX.test(opt)) correctPositions.push(i);
@@ -392,7 +392,7 @@ export function parseAnswersFile(content: string): Map<string, string> {
   return map;
 }
 
-function _norm(s: string): string {
+export function _norm(s: string): string {
   return s.toLowerCase().replace(/[–—\-:;.,!?]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
