@@ -50,6 +50,7 @@ const MARKER_REGEX = /\(\s*giust[oa]\s*\)/i;
 const OPTION_LINE_REGEX = /^([A-Da-d])(?:[.)\:\-]\s*|\s+)(\S.*)/;
 const LEADING_NUMBERING_REGEX = /^\s*(\d+)[.)]\s*/;
 
+/** Normalizza il testo per TSV: rimuove tab, a capo e spazi multipli. */
 export function sanitizeCell(s: string): string {
   return s
     .replace(/\t/g, " ")
@@ -126,6 +127,10 @@ interface EvaluatedOptions {
   errorMessage: string | null;
 }
 
+/**
+ * Valuta le 4 opzioni grezze: rimuove il marker (giusta), genera la stringa
+ * binary "0000" con "1" in posizione delle risposte corrette e rileva errori.
+ */
 export function evaluateOptions(rawOptions: [string, string, string, string]): EvaluatedOptions {
   const correctPositions: number[] = [];
   const cleanOptions = rawOptions.map((opt, i) => {
@@ -155,6 +160,11 @@ export function evaluateOptions(rawOptions: [string, string, string, string]): E
   return { cleanOptions, binary, hasBlockingError, errorMessage };
 }
 
+/**
+ * Parser principale: transpila un testo grezzo di domande a risposta multipla
+ * in una lista strutturata di `ParsedQuestion` con opzioni pulite e binary mask.
+ * Gestisce sia il formato multi-riga che quello mono-riga, anche misti.
+ */
 export function parseInput(rawText: string, capitolo: string): ParseResult {
   const text = (rawText || "")
     .replace(/\*\*/g, "") // rimuove markdown bold prima del parsing
@@ -392,6 +402,7 @@ export function parseAnswersFile(content: string): Map<string, string> {
   return map;
 }
 
+/** Normalizza una stringa per confronti case-insensitive: minuscolo, rimuove punteggiatura, spazi unificati. */
 export function _norm(s: string): string {
   return s.toLowerCase().replace(/[–—\-:;.,!?]+/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -522,6 +533,7 @@ export function injectGiustaFromAnswers(
   return lines.join("\n");
 }
 
+/** Costruisce una riga TSV per Anki a partire da una `ParsedQuestion`. */
 export function buildRow(q: ParsedQuestion): string {
   const front = sanitizeCell(`${q.capitolo} - ${q.displayNumber}. ${q.question}`);
   return [
@@ -535,6 +547,11 @@ export function buildRow(q: ParsedQuestion): string {
   ].join("\t");
 }
 
+/**
+ * Genera il contenuto TSV completo per Anki. Se `includeBlockingErrors` è
+ * false, scarta le domande con errori bloccanti (nessuna o multiple risposte
+ * marcate come corrette).
+ */
 export function buildTSV(
   questions: ParsedQuestion[],
   includeBlockingErrors: boolean
