@@ -1,21 +1,26 @@
 # AGENTS.md
 
-This project is a React + TypeScript + Vite web application for generating Anki TSV files. It runs entirely in the browser with no backend.
+Build: `npm run build` = `tsc -b && vite build` — typecheck runs first. Typecheck errors block the build.
 
-## Development Commands
+Dev: `npm run dev` → `http://localhost:5173`
 
-- **Install Dependencies**: `npm install`
-- **Start Dev Server**: `npm run dev` (typically `http://localhost:5173`)
-- **Build for Production**: `npm run build` (outputs to `dist/`)
-- **Preview Production Build**: `npm run preview`
+## Project structure
 
-## Project Structure
+- `src/parser.ts` — pure parsing + TSV generation logic, no React dependency. The file to test in isolation.
+- `src/App.tsx` — main UI component, also contains PDF/RTF file reader helpers.
+- `src/main.tsx` — React entrypoint (`ReactDOM.createRoot`).
+- `src/App.css` — all styling, no other CSS.
 
-- `src/parser.ts`: Contains core parsing and TSV generation logic, independent of React. This module can be tested or reused in isolation.
-- `src/App.tsx`: Main user interface.
-- `src/main.tsx`: React application entry point.
+## Conventions
+
+- UI is entirely in **Italian** (labels, placeholders, error messages, comments).
+- `index.html` uses `<html lang="it">`.
+- `tsconfig.json` has `noUnusedLocals: false` and `noUnusedParameters: false` — unused imports/vars will NOT cause typecheck errors.
 
 ## Testing
 
-- The `src/parser.ts` module is designed for isolation, making it suitable for focused unit testing.
-- There are no explicit test scripts defined in `package.json`, so a dedicated testing framework might need to be configured if unit/integration tests are required (e.g., `vitest` or `jest`).
+No test framework is configured. `src/parser.ts` is designed for isolated unit testing but has no tests yet.
+
+## Notable deps
+
+- `pdfjs-dist` (lazy-imported in `App.tsx`, worker loaded via `pdfjs-dist/build/pdf.worker.min.mjs`).
