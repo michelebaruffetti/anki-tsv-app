@@ -1,3 +1,7 @@
+// Test per parser.ts — copre parsing multi-riga e mono-riga,
+// parsing file risposte (testo e PDF), iniezione risposta corretta,
+// generazione TSV e utility di normalizzazione.
+
 import { describe, it, expect } from 'vitest';
 import {
   parseInput,
