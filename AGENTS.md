@@ -24,3 +24,10 @@ No test framework is configured. `src/parser.ts` is designed for isolated unit t
 ## Notable deps
 
 - `pdfjs-dist` (lazy-imported in `App.tsx`, worker loaded via `pdfjs-dist/build/pdf.worker.min.mjs`).
+
+## Commit conventions
+
+- `feat`: nuova funzionalità
+- `fix`: riparazione bug
+- `chore`: refactoring o modifiche al codice non complesso
+- I messaggi di commit devono essere sempre in **inglese**.
