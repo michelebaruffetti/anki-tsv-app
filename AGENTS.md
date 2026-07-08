@@ -19,7 +19,9 @@ Dev: `npm run dev` → `http://localhost:5173`
 
 ## Testing
 
-No test framework is configured. `src/parser.ts` is designed for isolated unit testing but has no tests yet.
+- `npm test` = `vitest run` — esegue tutti i test su `src/parser.test.ts` (106 test).
+- **Prima di ogni push è obbligatorio eseguire `npm test` e verificare che tutti i test passino.**
+- `src/parser.ts` è puro codice senza dipendenze da React, testato con Vitest.
 
 ## Notable deps
 
