@@ -7,6 +7,7 @@ Dev: `npm run dev` → `http://localhost:5173`
 ## Project structure
 
 - `src/parser.ts` — pure parsing + TSV generation logic, no React dependency. The file to test in isolation.
+- `src/parser.test.ts` — 106 test unitari per la logica di parsing, eseguibili con `npm test`.
 - `src/App.tsx` — main UI component, also contains PDF/RTF file reader helpers.
 - `src/main.tsx` — React entrypoint (`ReactDOM.createRoot`).
 - `src/App.css` — all styling, no other CSS.
