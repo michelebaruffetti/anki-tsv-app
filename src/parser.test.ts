@@ -1260,6 +1260,46 @@ D. Opz4
     expect(result).toContain('B. Opz2 (giusta)');
     expect(result).toContain('(giusta)');
   });
+
+  it('gestisce formato lettera su riga separata', () => {
+    const input = `
+1. Qual è la capitale?
+A
+Londra
+B
+Berlino
+C
+Parigi
+D
+Madrid
+`;
+
+    const answerMap = new Map([['Qual è la capitale?', 'Parigi']]);
+
+    const result = injectGiustaFromAnswers(input, answerMap);
+
+    expect(result).toContain('C\nParigi (giusta)');
+  });
+
+  it('gestisce formato lettera su riga separata con risposta in B', () => {
+    const input = `
+1. Domanda
+A
+Opzione A
+B
+Opzione B
+C
+Opzione C
+D
+Opzione D
+`;
+
+    const answerMap = new Map([['Domanda', 'Opzione B']]);
+
+    const result = injectGiustaFromAnswers(input, answerMap);
+
+    expect(result).toContain('B\nOpzione B (giusta)');
+  });
 });
 
 describe('buildRow — edge cases', () => {
@@ -1379,5 +1419,193 @@ describe('buildTSV — edge cases', () => {
     expect(tsv).toContain('Cap1');
     expect(tsv).toContain('Cap2');
     expect(tsv.split('\n').length).toBe(2);
+  });
+});
+
+describe('parseInput — formato lettera su riga separata', () => {
+  it('parses question with option letters on separate lines', () => {
+    const input = `
+1. Che cos'è la storiografia filosofica:
+A
+lo studio delle biografie dei filosofi
+B
+l'interpretazione delle filosofie antiche attraverso le moderne
+C
+l'analisi critica delle opere filosofiche senza contesto storico
+D
+l'intreccio tra studio della storia e riflessione filosofica (giusta)
+`;
+    const result = parseInput(input, 'Test');
+
+    expect(result.questions).toHaveLength(1);
+    expect(result.questions[0].question).toBe("Che cos'è la storiografia filosofica:");
+    expect(result.questions[0].options).toEqual([
+      'lo studio delle biografie dei filosofi',
+      "l'interpretazione delle filosofie antiche attraverso le moderne",
+      'l\'analisi critica delle opere filosofiche senza contesto storico',
+      'l\'intreccio tra studio della storia e riflessione filosofica'
+    ]);
+    expect(result.questions[0].binary).toBe('0001');
+  });
+
+  it('handles various punctuation after letter (A., B), C:, D-)', () => {
+    const input = `
+1. Domanda
+A.
+Opzione A
+B)
+Opzione B (giusta)
+C:
+Opzione C
+D-
+Opzione D
+`;
+    const result = parseInput(input, 'Test');
+
+    expect(result.questions).toHaveLength(1);
+    expect(result.questions[0].binary).toBe('0100');
+  });
+
+  it('handles wrapped option text (continuation lines)', () => {
+    const input = `
+1. Domanda
+A
+Opzione A che
+continua su più righe
+B
+Opzione B (giusta)
+C
+Opzione C
+D
+Opzione D
+`;
+    const result = parseInput(input, 'Test');
+
+    expect(result.questions[0].options[0]).toBe('Opzione A che continua su più righe');
+    expect(result.questions[0].binary).toBe('0100');
+  });
+
+  it('handles mixed formats (separate-line then same-line)', () => {
+    const input = `
+1. Domanda 1
+A
+Opzione A
+B
+Opzione B (giusta)
+C
+Opzione C
+D
+Opzione D
+
+2. Domanda 2 A Opz1 B Opz2 (giusta) C Opz3 D Opz4
+`;
+    const result = parseInput(input, 'Test');
+
+    expect(result.questions).toHaveLength(2);
+    expect(result.questions[0].binary).toBe('0100');
+    expect(result.questions[1].binary).toBe('0100');
+  });
+
+  it('handles lowercase letters (a, b, c, d)', () => {
+    const input = `
+1. Domanda
+a
+Opzione A (giusta)
+b
+Opzione B
+c
+Opzione C
+d
+Opzione D
+`;
+    const result = parseInput(input, 'Test');
+
+    expect(result.questions[0].binary).toBe('1000');
+  });
+
+  it('reports error for letter without content followed by new numbered question', () => {
+    const input = `
+1. Prima domanda
+A
+2. Seconda domanda
+A. Opz1
+B. Opz2 (giusta)
+C. Opz3
+D. Opz4
+`;
+    const result = parseInput(input, 'Test');
+
+    expect(result.questions).toHaveLength(1);
+    expect(result.questions[0].displayNumber).toBe('2');
+    expect(result.questions[0].binary).toBe('0100');
+    expect(result.errors.some(e => e.message.includes('senza contenuto') && e.message.includes('nuova domanda'))).toBe(true);
+  });
+
+  it('reports error for letter without content at end of input', () => {
+    const input = `
+1. Domanda
+A
+Opzione A (giusta)
+B
+Opzione B
+C
+Opzione C
+D`.trimEnd();
+    const result = parseInput(input, 'Test');
+
+    expect(result.errors.some(e => e.message.includes('senza contenuto alla fine'))).toBe(true);
+    expect(result.errors.some(e => e.message.includes('incompleta'))).toBe(true);
+    expect(result.questions).toHaveLength(0);
+  });
+
+  it('reports error for letter without content followed by blank line', () => {
+    const input = `
+1. Domanda
+A
+
+B
+Opzione B (giusta)
+C
+Opzione C
+D
+Opzione D
+`;
+    const result = parseInput(input, 'Test');
+
+    expect(result.errors.some(e => e.message.includes('senza contenuto') && e.message.includes('riga vuota'))).toBe(true);
+  });
+
+  it('preserves original numbering with separate-line format', () => {
+    const input = `
+9. Domanda numerata
+A
+Opzione A
+B
+Opzione B (giusta)
+C
+Opzione C
+D
+Opzione D
+`;
+    const result = parseInput(input, 'Test');
+
+    expect(result.questions[0].displayNumber).toBe('9');
+  });
+
+  it('handles consecutive letters without content (B overwrites A)', () => {
+    const input = `
+1. Domanda
+A
+B
+Opzione B (giusta)
+C
+Opzione C
+D
+Opzione D
+`;
+    const result = parseInput(input, 'Test');
+
+    expect(result.questions).toHaveLength(0);
+    expect(result.errors.some(e => e.message.includes('incompleta'))).toBe(true);
   });
 });

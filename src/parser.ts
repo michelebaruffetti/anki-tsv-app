@@ -1,7 +1,7 @@
 /**
  * Parser robusto per domande a risposta multipla -> righe TSV per Anki.
  *
- * Supporta due formati, anche misti nello stesso testo:
+ * Supporta tre formati, anche misti nello stesso testo:
  *
  * 1) Formato "multi-riga" (un'opzione per riga):
  *    9. Testo della domanda (anche su più righe)
@@ -12,6 +12,17 @@
  *
  * 2) Formato "mono-riga" (lista numerata inline):
  *    1. Testo della domanda A opzione1 B opzione2 (giusta) C opzione3 D opzione4
+ *
+ * 3) Formato "lettera su riga separata" (lettera sola, testo sulla riga successiva):
+ *    1. Testo della domanda
+ *    A
+ *    risposta 1
+ *    B
+ *    risposta 2 (giusta)
+ *    C
+ *    risposta 3
+ *    D
+ *    risposta 4
  *
  * Gestisce markdown bold (**), righe avvolte (wrap), testo introduttivo
  * prima delle domande, continuazioni multi-riga di un'opzione, e preserva
@@ -48,6 +59,7 @@ export interface ParseResult {
 
 const MARKER_REGEX = /\(\s*giust[oa]\s*\)/i;
 const OPTION_LINE_REGEX = /^([A-Da-d])(?:[.)\:\-]\s*|\s+)(\S.*)/;
+const OPTION_LETTER_ONLY_REGEX = /^([A-Da-d])[.)\:\-]?\s*$/;
 const LEADING_NUMBERING_REGEX = /^\s*(\d+)[.)]\s*/;
 
 /** Normalizza il testo per TSV: rimuove tab, a capo e spazi multipli. */
@@ -179,6 +191,7 @@ export function parseInput(rawText: string, capitolo: string): ParseResult {
   let currentOptions: Record<string, string> = {};
   let questionCounter = 0;
   let lastOptionLetter: string | null = null;
+  let pendingOptionLetter: string | null = null;
   let pendingNumber: string | null = null;
   let hasStartedQuestion = false;
 
@@ -246,6 +259,7 @@ export function parseInput(rawText: string, capitolo: string): ParseResult {
     questionBuffer = [];
     currentOptions = {};
     lastOptionLetter = null;
+    pendingOptionLetter = null;
     pendingNumber = null;
   }
 
@@ -259,6 +273,13 @@ export function parseInput(rawText: string, capitolo: string): ParseResult {
         // Riga vuota nel testo pre-opzioni: resetta buffer/numero orfani.
         questionBuffer = [];
         pendingNumber = null;
+      } else if (pendingOptionLetter !== null) {
+        // Riga vuota mentre aspettavamo contenuto per un'opzione
+        errors.push({
+          index: questionCounter + 1,
+          message: `Opzione "${pendingOptionLetter}" senza contenuto (riga vuota) vicino a "${snippetOf(questionBuffer)}".`,
+        });
+        pendingOptionLetter = null;
       }
       continue;
     }
@@ -272,7 +293,26 @@ export function parseInput(rawText: string, capitolo: string): ParseResult {
       continue;
     }
 
-    // --- OPZIONE A/B/C/D ---
+    // --- OPZIONE LETTERA SU RIGA SEPARATA (es. "A" o "B.") ---
+    const letterOnlyMatch = line.match(OPTION_LETTER_ONLY_REGEX);
+    if (letterOnlyMatch) {
+      const letter = letterOnlyMatch[1].toUpperCase();
+      
+      if (isComplete()) flush();
+      hasStartedQuestion = true;
+
+      if (currentOptions[letter] !== undefined) {
+        errors.push({
+          index: questionCounter + 1,
+          message: `Lettera "${letter}" duplicata vicino a "${snippetOf(questionBuffer)}". Mantenuto il valore più recente.`,
+        });
+      }
+      pendingOptionLetter = letter;
+      lastOptionLetter = letter;
+      continue;
+    }
+
+    // --- OPZIONE A/B/C/D (con testo sulla stessa riga) ---
     const m = line.match(OPTION_LINE_REGEX);
     if (m) {
       const letter = m[1].toUpperCase();
@@ -289,10 +329,32 @@ export function parseInput(rawText: string, capitolo: string): ParseResult {
       }
       currentOptions[letter] = content;
       lastOptionLetter = letter;
+      pendingOptionLetter = null;
       continue;
     }
 
-    // --- CONTINUAZIONE O TESTO DOMANDA ---
+    // --- CONTINUAZIONE OPZIONE (testo su righe successive) ---
+    if (pendingOptionLetter !== null) {
+      // Se la riga è l'inizio di una nuova domanda numerata, flushiamo
+      if (LEADING_NUMBERING_REGEX.test(line)) {
+        errors.push({
+          index: questionCounter + 1,
+          message: `Opzione "${pendingOptionLetter}" senza contenuto (seguita da nuova domanda) vicino a "${snippetOf(questionBuffer)}".`,
+        });
+        flush();
+        const { number, rest } = extractNumber(line);
+        pendingNumber = number;
+        questionBuffer.push(rest);
+        hasStartedQuestion = true;
+        continue;
+      }
+      // Stiamo aspettando il contenuto per pendingOptionLetter
+      currentOptions[pendingOptionLetter] = line.trim();
+      lastOptionLetter = pendingOptionLetter;
+      pendingOptionLetter = null;
+      continue;
+    }
+
     if (lastOptionLetter !== null) {
       if (LEADING_NUMBERING_REGEX.test(line)) {
         flush();
@@ -325,7 +387,14 @@ export function parseInput(rawText: string, capitolo: string): ParseResult {
     }
   }
 
+  const pendingAtEnd = pendingOptionLetter;
   flush();
+  if (pendingAtEnd !== null) {
+    errors.push({
+      index: questionCounter + 1,
+      message: `Opzione "${pendingAtEnd}" senza contenuto alla fine del testo.`,
+    });
+  }
   if (questionBuffer.length > 0) {
     errors.push({
       index: questionCounter + 1,
@@ -456,10 +525,55 @@ export function injectGiustaFromAnswers(
   let qi = 0;
   let optCount = 0;
   let started = false;
+  let pendingInjectLetter: string | null = null;
 
   for (let li = 0; li < lines.length; li++) {
     const trimmed = lines[li].trim();
     if (!trimmed) continue;
+
+    // --- GESTIONE LETTERA SU RIGA SEPARATA (nuovo formato) ---
+    if (pendingInjectLetter !== null) {
+      // La riga precedente era una lettera sola, questa è il contenuto
+      const optText = trimmed;
+      const letter = pendingInjectLetter;
+      pendingInjectLetter = null;
+
+      if (letter === "A" || optCount === 0) {
+        if (started && optCount > 0) qi++;
+        started = true;
+        optCount = 1;
+      } else {
+        optCount++;
+      }
+
+      if (qi >= result.questions.length) continue;
+
+      const currentQ = result.questions[qi];
+      const correctOptIdx = correctOptionByQ.get(currentQ.index);
+      if (correctOptIdx === undefined) {
+        if (letter === "D" || letter === "d") { qi++; optCount = 0; }
+        continue;
+      }
+
+      const correctLetter = optLetters[correctOptIdx];
+      if (letter === correctLetter && !alreadyMarked(lines[li])) {
+        const expectedContent = currentQ.options[correctOptIdx];
+        if (_norm(optText) === _norm(expectedContent)) {
+          lines[li] = lines[li] + " (giusta)";
+          matchedIndices.add(currentQ.index);
+        }
+      }
+
+      if (letter === "D" || letter === "d") { qi++; optCount = 0; }
+      continue;
+    }
+
+    // Controlla se è una lettera sola (nuovo formato)
+    const letterOnlyMatch = trimmed.match(OPTION_LETTER_ONLY_REGEX);
+    if (letterOnlyMatch) {
+      pendingInjectLetter = letterOnlyMatch[1].toUpperCase();
+      continue;
+    }
 
     const optMatch = trimmed.match(/^([A-Da-d])(?:[.)\:\-]\s*|\s+)(.*)$/);
     if (!optMatch) continue;
