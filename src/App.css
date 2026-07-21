@@ -116,6 +116,7 @@ h1 {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 24px;
+  min-width: 0;
   box-shadow: var(--shadow);
   /* subtle top accent stripe */
   background-image: linear-gradient(
@@ -717,4 +718,32 @@ tr.row-error .cell-correct { background: rgba(62,207,142,.05); }
   gap: 8px;
   flex-wrap: wrap;
   flex-shrink: 0;
+}
+
+/* ── ≤ 640px: phone landscape / small tablet ────────────────────────── */
+@media (max-width: 640px) {
+  .panel { padding: 16px; }
+  .app-header { margin-bottom: 20px; }
+  .brand { gap: 12px; }
+  .app { padding-bottom: 36px; }
+
+  .panel-heading-row { flex-wrap: wrap; gap: 8px 12px; }
+  .field-label-row { flex-wrap: wrap; gap: 6px; }
+
+  .download-row { flex-direction: column; align-items: stretch; }
+  .filename-field { min-width: auto; }
+  .actions { justify-content: center; }
+}
+
+/* ── ≤ 480px: phone portrait ────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .generate-row { flex-direction: column; align-items: stretch; gap: 10px; }
+  .generate-row-left { justify-content: center; }
+  .kbd-hint { display: none; }
+  .empty-state p { max-width: none; }
+}
+
+/* ── ≤ 900px: tablet / mobile (tabella senza scroll verticale) ──────── */
+@media (max-width: 900px) {
+  .table-wrap { max-height: none; }
 }
