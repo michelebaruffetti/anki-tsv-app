@@ -82,7 +82,17 @@ D coscienza sociale`;
 const EXAMPLE_TEXT_NUMBERED = `1. Kuhn descrive il progresso scientifico rispetto alla visione tradizionale: Paragrafo di riferimento - Cenni biografici A come una serie di miglioramenti continui e lineari B attraverso discontinuità e rivoluzioni scientifiche (giusta) C mediante il rifiuto totale delle teorie precedenti D con una stretta aderenza ai metodi empirici
 2. I paradigmi influenzano la scelta dei problemi scientifici: Paragrafo di riferimento - I paradigmi A limitando i problemi riconosciuti come scientificamente validi (giusta) B espandendo il campo di indagine senza restrizioni C ignorando le implicazioni etiche della ricerca D concentrandosi su problemi metafisici e teorici`;
 
-/* ── utilities ───────────────────────────────────────────────────────── */
+  const EXAMPLE_TEXT_LETTER_ONLY = `1. Testo della domanda:
+A
+prima opzione
+B
+seconda opzione (giusta)
+C
+terza opzione
+D
+quarta opzione`;
+
+  /* ── utilities ───────────────────────────────────────────────────────── */
 
 function downloadTextFile(filename: string, content: string) {
   const blob = new Blob([content], {
@@ -136,7 +146,8 @@ function FormatGuide() {
               stare su più righe. Le domande sono separate da righe vuote
               (opzionale).
             </p>
-            <pre>{`1. Testo della domanda:
+            <pre>{`1. Testo della domanda
+che continua su più righe:
 A prima opzione
 B seconda opzione (giusta)
 C terza opzione
@@ -158,6 +169,28 @@ D quarta opzione`}</pre>
           </section>
 
           <section className="guide-section">
+            <h3>Formato C — Lettera su riga separata</h3>
+            <p>
+              La lettera dell'opzione sta da sola su una riga, il testo segue sulla riga
+              successiva. Utile per testo copiato da PDF o output OCR.
+            </p>
+            <pre>{`1. Testo della domanda:
+A
+prima opzione
+B
+seconda opzione (giusta)
+C
+terza opzione
+D
+quarta opzione`}</pre>
+            <p>
+              Separatori accettati dopo la lettera: nessuno (lettera nuda), oppure{" "}
+              <code>.</code> <code>)</code> <code>:</code> <code>-</code> (es. <code>A.</code>{" "}
+              o <code>B)</code>).
+            </p>
+          </section>
+
+          <section className="guide-section">
             <h3>Risposta corretta</h3>
             <p>
               Aggiungi <code>(giusta)</code> o <code>(giusto)</code> in
@@ -176,7 +209,8 @@ A la risposta (giusto) con testo dopo`}</pre>
               continuazione viene riattaccata automaticamente all'opzione
               precedente — incluso <code>(giusta)</code> su riga propria.
             </p>
-            <pre>{`D perché richiedono un cambiamento radicale
+            <pre>{`D opzione molto lunga che nel copy-paste
+va a capo automaticamente
 (giusta)`}</pre>
           </section>
 
@@ -188,6 +222,18 @@ A la risposta (giusto) con testo dopo`}</pre>
               domande viene ignorato. I numeri di lista (es. <code>9.</code>)
               vengono preservati nel testo della domanda in output.
             </p>
+            <p>
+              <strong>Formati misti:</strong> è possibile combinare i formati A, B e C nello
+              stesso testo — il parser li riconosce automaticamente.
+            </p>
+            <pre>{`Introduzione al capitolo, testo libero qui.
+Questa riga viene ignorata.
+
+1. Prima domanda vera:
+A opzione 1
+B opzione 2 (giusta)
+C opzione 3
+D opzione 4`}</pre>
           </section>
 
           <section className="guide-section">
@@ -347,6 +393,10 @@ export default function App() {
     setRawText(EXAMPLE_TEXT_NUMBERED);
     setFormError(null);
   }
+  function loadExampleLetterOnly() {
+    setRawText(EXAMPLE_TEXT_LETTER_ONLY);
+    setFormError(null);
+  }
 
   const blockingCount = result
     ? result.questions.filter((q) => q.hasBlockingError).length
@@ -431,6 +481,13 @@ export default function App() {
                   onClick={loadExampleNumbered}
                 >
                   Esempio B
+                </button>
+                <button
+                  type="button"
+                  className="link-btn"
+                  onClick={loadExampleLetterOnly}
+                >
+                  Esempio C
                 </button>
               </span>
             </div>
