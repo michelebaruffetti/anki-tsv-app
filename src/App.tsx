@@ -435,7 +435,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="layout">
+      <main className={`layout${result ? ' layout--has-results' : ''}`}>
         {/* ── colonna sinistra: input ── */}
         <section className="panel" aria-labelledby="input-heading">
           <h2 id="input-heading" className="panel-heading-row">
