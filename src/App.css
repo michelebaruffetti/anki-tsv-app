@@ -114,6 +114,10 @@ h1 {
     rgba(242,184,75,.04) 0px,
     transparent 40px
   );
+  transition: border-color 0.2s;
+}
+.panel:hover {
+  border-color: rgba(242,184,75,.2);
 }
 
 .panel h2 {
@@ -134,6 +138,12 @@ h1 {
   align-items: center;
 }
 
+.panel-heading-row > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .file-answer-btn {
   background: none;
   border: 1px solid var(--border);
@@ -142,15 +152,16 @@ h1 {
   font-size: 0.72rem;
   font-weight: 500;
   cursor: pointer;
-  padding: 4px 10px;
+  padding: 5px 12px;
   text-transform: none;
   letter-spacing: normal;
-  transition: border-color 0.12s, color 0.12s;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
   white-space: nowrap;
 }
 .file-answer-btn:hover {
   border-color: var(--accent);
   color: var(--text);
+  background: var(--accent-dim);
 }
 
 .step-num {
@@ -191,17 +202,21 @@ input[type="text"] {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 9px 12px;
+  padding: 10px 14px;
   color: var(--text);
   font-family: var(--font-mono);
   font-size: 0.88rem;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+input[type="text"]:hover {
+  border-color: rgba(242,184,75,.3);
 }
 input[type="text"]:focus,
 textarea:focus {
   outline: none;
   border-color: rgba(242,184,75,.5);
   box-shadow: 0 0 0 3px rgba(242,184,75,.1);
+  background: var(--surface-3);
 }
 
 textarea {
@@ -209,13 +224,22 @@ textarea {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 12px;
+  padding: 14px;
   color: var(--text);
   font-family: var(--font-mono);
   font-size: 0.84rem;
   line-height: 1.55;
   resize: vertical;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+textarea:hover {
+  border-color: rgba(242,184,75,.3);
+}
+textarea:focus {
+  outline: none;
+  border-color: rgba(242,184,75,.5);
+  box-shadow: 0 0 0 3px rgba(242,184,75,.1);
+  background: var(--surface-3);
 }
 
 .example-links { display: flex; gap: 10px; }
@@ -239,6 +263,10 @@ textarea {
   border-radius: var(--radius-sm);
   overflow: hidden;
   margin-bottom: 16px;
+  transition: border-color 0.2s;
+}
+.accordion:hover {
+  border-color: rgba(242,184,75,.2);
 }
 
 .accordion-trigger {
@@ -364,21 +392,56 @@ kbd {
   gap: 3px;
 }
 
+.generate-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.generate-row-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── reset button ─────────────────────────────────────────────────────── */
+.reset-btn {
+  background: transparent;
+  color: var(--text-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-weight: 500;
+  font-size: 0.84rem;
+  cursor: pointer;
+  transition: border-color 0.14s, color 0.14s, background 0.14s;
+}
+.reset-btn:hover {
+  border-color: var(--warn);
+  color: var(--warn);
+  background: var(--warn-dim);
+}
+
 /* ── buttons ──────────────────────────────────────────────────────────── */
 .primary-btn {
   background: var(--accent);
   color: #18100a;
   border: none;
   border-radius: var(--radius-sm);
-  padding: 10px 18px;
+  padding: 11px 20px;
   font-weight: 700;
   font-size: 0.88rem;
   cursor: pointer;
   letter-spacing: 0.01em;
-  transition: background 0.14s, transform 0.1s;
+  transition: background 0.14s, transform 0.1s, box-shadow 0.14s;
   box-shadow: var(--shadow-sm);
 }
-.primary-btn:hover { background: var(--accent-hover); }
+.primary-btn:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 4px 12px rgba(242,184,75,.25);
+}
 .primary-btn:active { transform: scale(0.98); }
 .primary-btn:disabled {
   background: var(--surface-3);
@@ -393,13 +456,17 @@ kbd {
   color: var(--text-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 10px 16px;
+  padding: 11px 18px;
   font-weight: 500;
   font-size: 0.88rem;
   cursor: pointer;
   transition: border-color 0.14s, color 0.14s, background 0.14s;
 }
-.secondary-btn:hover { border-color: var(--accent); color: var(--text); }
+.secondary-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+  background: var(--accent-dim);
+}
 .secondary-btn:disabled { color: var(--text-3); cursor: not-allowed; }
 
 .secondary-btn--success {
@@ -470,11 +537,16 @@ kbd {
   gap: 6px;
   font-size: 0.76rem;
   font-weight: 500;
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text-2);
+  transition: border-color 0.14s, background 0.14s;
+}
+.summary-pill:hover {
+  border-color: rgba(242,184,75,.3);
+  background: var(--surface-3);
 }
 .pill-dot {
   width: 6px;
@@ -492,7 +564,7 @@ kbd {
   background: var(--warn-dim);
   border: 1px solid var(--warn-border);
   border-radius: var(--radius-sm);
-  padding: 10px 14px;
+  padding: 12px 16px;
   margin-bottom: 14px;
   font-size: 0.8rem;
 }
@@ -516,13 +588,18 @@ kbd {
 .checkbox-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 0.82rem;
   color: var(--text-2);
-  margin-bottom: 14px;
+  margin-bottom: 16px;
   cursor: pointer;
+  padding: 6px 0;
+  transition: color 0.14s;
 }
-.checkbox-row input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--accent); }
+.checkbox-row:hover {
+  color: var(--text);
+}
+.checkbox-row input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
 
 /* ── preview table ────────────────────────────────────────────────────── */
 .table-wrap {
@@ -532,6 +609,10 @@ kbd {
   margin-bottom: 16px;
   max-height: 400px;
   overflow-y: auto;
+  transition: border-color 0.2s;
+}
+.table-wrap:hover {
+  border-color: rgba(242,184,75,.25);
 }
 
 table {
@@ -542,10 +623,11 @@ table {
 
 th, td {
   text-align: left;
-  padding: 7px 10px;
+  padding: 9px 12px;
   border-bottom: 1px solid var(--border-soft);
   vertical-align: top;
   line-height: 1.4;
+  transition: background 0.12s;
 }
 
 th {
@@ -560,7 +642,7 @@ th {
   z-index: 1;
 }
 
-tr:hover td { background: rgba(255,255,255,.015); }
+tr:hover td { background: rgba(255,255,255,.02); }
 tr:last-child td { border-bottom: none; }
 
 .col-nr  { width: 38px; text-align: center; color: var(--text-muted); white-space: nowrap; }
@@ -602,16 +684,17 @@ tr.row-error .cell-correct { background: rgba(62,207,142,.05); }
 .download-row {
   display: flex;
   align-items: flex-end;
-  gap: 12px;
+  gap: 16px;
   flex-wrap: wrap;
+  padding-top: 4px;
 }
 
 .filename-field {
   flex: 1;
-  min-width: 140px;
+  min-width: 160px;
   margin-bottom: 0;
 }
-.filename-field label { margin-bottom: 5px; }
+.filename-field label { margin-bottom: 6px; }
 
 .actions {
   display: flex;

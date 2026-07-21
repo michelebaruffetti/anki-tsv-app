@@ -398,6 +398,19 @@ export default function App() {
     setFormError(null);
   }
 
+  function handleReset() {
+    setCapitolo("CAP1");
+    setRawText("");
+    setFilename("anki.tsv");
+    setIncludeErrors(false);
+    setResult(null);
+    setFormError(null);
+    setCopyState("idle");
+    setFeedbackMsg(null);
+  }
+
+  const hasContent = rawText.trim().length > 0 || capitolo !== "CAP1";
+
   const blockingCount = result
     ? result.questions.filter((q) => q.hasBlockingError).length
     : 0;
@@ -518,16 +531,27 @@ export default function App() {
           )}
 
           <div className="generate-row">
-            <button
-              type="button"
-              className="primary-btn"
-              onClick={handleGenerate}
-            >
-              Genera TSV
-            </button>
-            <span className="kbd-hint">
-              <kbd>Ctrl</kbd>+<kbd>Enter</kbd>
-            </span>
+            <div className="generate-row-left">
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={handleGenerate}
+              >
+                Genera TSV
+              </button>
+              <span className="kbd-hint">
+                <kbd>Ctrl</kbd>+<kbd>Enter</kbd>
+              </span>
+            </div>
+            {hasContent && (
+              <button
+                type="button"
+                className="reset-btn"
+                onClick={handleReset}
+              >
+                Reset
+              </button>
+            )}
           </div>
         </section>
 
