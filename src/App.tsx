@@ -445,7 +445,7 @@ export default function App() {
             </span>
             <button
               type="button"
-              className="file-answer-btn"
+              className="file-answer-btn file-answer-btn--primary"
               onClick={() => fileInputRef.current?.click()}
             >
               + compila risposte da file
@@ -549,7 +549,7 @@ export default function App() {
                 className="reset-btn"
                 onClick={handleReset}
               >
-                Reset
+                ↺ Reset
               </button>
             )}
           </div>

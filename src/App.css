@@ -164,6 +164,18 @@ h1 {
   background: var(--accent-dim);
 }
 
+.file-answer-btn--primary {
+  background: var(--accent);
+  color: #18100a;
+  border-color: var(--accent);
+  font-weight: 700;
+}
+.file-answer-btn--primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: #18100a;
+}
+
 .step-num {
   display: inline-flex;
   align-items: center;
@@ -377,13 +389,6 @@ kbd {
 }
 
 /* ── generate button row ──────────────────────────────────────────────── */
-.generate-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 4px;
-}
-
 .kbd-hint {
   font-size: 0.76rem;
   color: var(--text-3);
@@ -686,7 +691,9 @@ tr.row-error .cell-correct { background: rgba(62,207,142,.05); }
   align-items: flex-end;
   gap: 16px;
   flex-wrap: wrap;
-  padding-top: 4px;
+  border-top: 1px solid var(--border-soft);
+  padding-top: 16px;
+  margin-top: 8px;
 }
 
 .filename-field {
